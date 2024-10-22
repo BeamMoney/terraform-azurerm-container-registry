@@ -1,8 +1,3 @@
-variable "create_resource_group" {
-  description = "Whether to create resource group and use it for all networking resources"
-  default     = false
-}
-
 variable "resource_group_name" {
   description = "A container that holds related resources for an Azure solution"
   default     = ""
@@ -41,20 +36,13 @@ variable "network_rule_set" { # change this to match actual objects
     ip_rule = optional(list(object({
       ip_range = string
     })))
-    virtual_network = optional(list(object({
-      subnet_id = string
-    })))
   })
   default = null
 }
 
-variable "retention_policy" {
-  description = "Set a retention policy for untagged manifests"
-  type = object({
-    days    = optional(number)
-    enabled = optional(bool)
-  })
-  default = null
+variable "retention_days" {
+  description = "The number of days to retain untagged manifests. The value must be between 0 and 365."
+  default     = 7
 }
 
 variable "enable_content_trust" {

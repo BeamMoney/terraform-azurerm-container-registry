@@ -2,23 +2,8 @@
 # Local declarations
 #---------------------------------
 locals {
-  resource_group_name = element(coalescelist(data.azurerm_resource_group.rgrp.*.name, azurerm_resource_group.rg.*.name, [""]), 0)
-  location            = element(coalescelist(data.azurerm_resource_group.rgrp.*.location, azurerm_resource_group.rg.*.location, [""]), 0)
-}
-
-#---------------------------------------------------------
-# Resource Group Creation or selection - Default is "false"
-#----------------------------------------------------------
-data "azurerm_resource_group" "rgrp" {
-  count = var.create_resource_group ? 0 : 1
-  name  = var.resource_group_name
-}
-
-resource "azurerm_resource_group" "rg" {
-  count    = var.create_resource_group ? 1 : 0
-  name     = lower(var.resource_group_name)
-  location = var.location
-  tags     = merge({ "ResourceName" = format("%s", var.resource_group_name) }, var.tags, )
+  resource_group_name = var.resource_group_name
+  location            = var.location
 }
 
 data "azurerm_log_analytics_workspace" "logws" {
@@ -69,31 +54,12 @@ resource "azurerm_container_registry" "main" {
           ip_range = ip_rule.value.ip_range
         }
       }
-
-      dynamic "virtual_network" {
-        for_each = network_rule_set.value.virtual_network
-        content {
-          action    = "Allow"
-          subnet_id = virtual_network.value.subnet_id
-        }
-      }
     }
   }
 
-  dynamic "retention_policy" {
-    for_each = var.retention_policy != null ? [var.retention_policy] : []
-    content {
-      days    = lookup(retention_policy.value, "days", 7)
-      enabled = lookup(retention_policy.value, "enabled", true)
-    }
-  }
+  retention_policy_in_days = var.retention_days
 
-  dynamic "trust_policy" {
-    for_each = var.enable_content_trust ? [1] : []
-    content {
-      enabled = var.enable_content_trust
-    }
-  }
+  trust_policy_enabled = var.enable_content_trust
 
   identity {
     type         = var.identity_ids != null ? "SystemAssigned, UserAssigned" : "SystemAssigned"
@@ -103,7 +69,6 @@ resource "azurerm_container_registry" "main" {
   dynamic "encryption" {
     for_each = var.encryption != null ? [var.encryption] : []
     content {
-      enabled            = true
       key_vault_key_id   = encryption.value.key_vault_key_id
       identity_client_id = encryption.value.identity_client_id
     }
@@ -170,7 +135,7 @@ resource "azurerm_subnet" "snet-ep" {
   resource_group_name                            = local.resource_group_name
   virtual_network_name                           = data.azurerm_virtual_network.vnet01.0.name
   address_prefixes                               = var.private_subnet_address_prefix
-  private_endpoint_network_policies_enabled      = true
+  private_endpoint_network_policies              = "Enabled"
 }
 
 resource "azurerm_private_endpoint" "pep1" {
@@ -220,11 +185,10 @@ resource "azurerm_monitor_diagnostic_setting" "acr-diag" {
   storage_account_id         = var.storage_account_name != null ? data.azurerm_storage_account.storeacc.0.id : null
   log_analytics_workspace_id = data.azurerm_log_analytics_workspace.logws.0.id
 
-  dynamic "log" {
+  dynamic "enabled_log" {
     for_each = var.acr_diag_logs
     content {
       category = log.value
-      enabled  = true
     }
   }
 
@@ -233,6 +197,6 @@ resource "azurerm_monitor_diagnostic_setting" "acr-diag" {
   }
 
   lifecycle {
-    ignore_changes = [log, metric]
+    ignore_changes = [enabled_log, metric]
   }
 }
